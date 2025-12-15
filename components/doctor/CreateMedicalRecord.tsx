@@ -4,10 +4,8 @@ import {
   FileText, 
   Search, 
   X, 
-  Upload, 
   User, 
   Calendar, 
-  Stethoscope,
   AlertCircle,
   Check,
   Loader2,
@@ -69,10 +67,10 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
     description: '',
     record_type: 'consultation',
     date: new Date().toISOString().split('T')[0],
-    is_shared: true
+    is_shared: true,
+    laboratory_id: null as number | null
   });
   
-  const [attachment, setAttachment] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabs, setLoadingLabs] = useState(false);
   const [error, setError] = useState('');
@@ -146,7 +144,25 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
 
   const handleLabSelect = (lab: Laboratory) => {
     setSelectedLab(lab);
+    setFormData(prev => ({ ...prev, laboratory_id: lab.id }));
     setShowLabSearch(false);
+  };
+
+  const resetForm = () => {
+    setSelectedPatient(null);
+    setSelectedLab(null);
+    setFormData({
+      title: '',
+      description: '',
+      record_type: 'consultation',
+      date: new Date().toISOString().split('T')[0],
+      is_shared: true,
+      laboratory_id: null
+    });
+    setShowPatientSearch(true);
+    setShowLabSearch(false);
+    setError('');
+    setSuccess('');
   };
 
   const handleSubmit = async () => {
@@ -165,23 +181,20 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
     setSuccess('');
 
     try {
-      const formDataToSend = new FormData();
-      
-      // Append form data
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('description', formData.description);
-      formDataToSend.append('record_type', formData.record_type);
-      formDataToSend.append('date', formData.date);
-      formDataToSend.append('is_shared', formData.is_shared.toString());
-      if (selectedLab) {
-        formDataToSend.append('laboratory_id', selectedLab.id.toString());
-      }
-      if (attachment) {
-        formDataToSend.append('attachment', attachment);
-      }
+      // Prepare JSON data
+      const recordData = {
+        title: formData.title,
+        description: formData.description || '',
+        record_type: formData.record_type,
+        date: formData.date,
+        is_shared: formData.is_shared,
+        laboratory_id: formData.laboratory_id
+      };
 
-      // Pass patientId as separate parameter, not in FormData
-      await api.doctor.addMedicalRecord(token, selectedPatient.id, formDataToSend);
+      console.log('Sending JSON data:', recordData);
+
+      // Send as JSON
+      await api.doctor.addMedicalRecord(token, selectedPatient.id, recordData);
       
       setSuccess('Medical record created successfully!');
       setTimeout(() => {
@@ -190,29 +203,15 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
       }, 1500);
       
     } catch (err: any) {
+      console.error('Submission error:', err);
       setError(err.message || 'Failed to create medical record');
     } finally {
       setLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setSelectedPatient(null);
-    setSelectedLab(null);
-    setFormData({
-      title: '',
-      description: '',
-      record_type: 'consultation',
-      date: new Date().toISOString().split('T')[0],
-      is_shared: true
-    });
-    setAttachment(null);
-    setShowPatientSearch(true);
-    setShowLabSearch(false);
-  };
-
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-100 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-slate-800 dark:text-white">
           Create Medical Record
@@ -220,7 +219,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
         {onClose && (
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -258,7 +257,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               placeholder="Search patients by name, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+              className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
             />
           </div>
 
@@ -272,7 +271,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
                 <button
                   key={patient.id}
                   onClick={() => handlePatientSelect(patient)}
-                  className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 last:border-b-0"
+                  className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 last:border-b-0 transition-colors"
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
@@ -341,6 +340,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               <button
                 onClick={() => {
                   setSelectedLab(null);
+                  setFormData(prev => ({ ...prev, laboratory_id: null }));
                   setShowLabSearch(false);
                 }}
                 className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
@@ -396,7 +396,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
                   placeholder="Search laboratories by name, address, or specialization..."
                   value={labSearchTerm}
                   onChange={(e) => setLabSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                  className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
                 />
               </div>
 
@@ -414,7 +414,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
                     <button
                       key={lab.id}
                       onClick={() => handleLabSelect(lab)}
-                      className="w-full p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 last:border-b-0"
+                      className="w-full p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 last:border-b-0 transition-colors"
                     >
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
@@ -456,7 +456,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({...formData, title: e.target.value})}
-              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
               placeholder="e.g., Follow-up Consultation, Diagnosis Report"
               required
             />
@@ -469,7 +469,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[120px]"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[120px] focus:outline-none focus:ring-2 focus:ring-secondary"
               placeholder="Provide detailed notes about the consultation or diagnosis..."
             />
           </div>
@@ -482,11 +482,10 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               <select
                 value={formData.record_type}
                 onChange={(e) => setFormData({...formData, record_type: e.target.value})}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
               >
                 <option value="consultation">Consultation</option>
                 <option value="diagnosis">Diagnosis</option>
-                <option value="lab_report">Lab Report</option>
                 <option value="prescription">Prescription</option>
                 <option value="vaccination">Vaccination</option>
                 <option value="other">Other</option>
@@ -501,41 +500,8 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData({...formData, date: e.target.value})}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
               />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
-              Attach File (Optional)
-            </label>
-            <div className="flex items-center space-x-3">
-              <label className="flex-1 cursor-pointer">
-                <input
-                  type="file"
-                  onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                />
-                <div className="px-4 py-3 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 text-center">
-                  <Upload className="w-6 h-6 mx-auto text-slate-400 mb-2" />
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {attachment ? attachment.name : 'Click to upload file'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                    PDF, DOC, JPG, PNG up to 10MB
-                  </p>
-                </div>
-              </label>
-              {attachment && (
-                <button
-                  onClick={() => setAttachment(null)}
-                  className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
             </div>
           </div>
 
@@ -545,17 +511,17 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               id="is_shared"
               checked={formData.is_shared}
               onChange={(e) => setFormData({...formData, is_shared: e.target.checked})}
-              className="w-4 h-4 text-blue-600 rounded"
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
             />
             <label htmlFor="is_shared" className="ml-2 text-sm text-slate-600 dark:text-slate-300">
               Share this record with the patient
             </label>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
             <button
               onClick={resetForm}
-              className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg"
+              className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
               disabled={loading}
             >
               Clear
@@ -563,7 +529,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
             <button
               onClick={handleSubmit}
               disabled={loading || !formData.title.trim()}
-              className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
             >
               {loading ? (
                 <>

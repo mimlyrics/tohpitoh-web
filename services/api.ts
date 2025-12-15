@@ -307,6 +307,42 @@ export const api = {
 
   // ==================== DOCTOR ENDPOINTS ====================
   doctor: {
+
+  // Get doctor's patients
+  getPatients: async (token: string): Promise<Patient[]> => {
+    const response = await fetch(`${BASE_URL}/doctors/patients`, {
+      headers: getHeaders(token),
+    });
+    const data = await handleResponse(response);
+    return data.data || data || [];
+  },
+
+  // Get doctor's medical records
+  getMedicalRecords: async (token: string): Promise<MedicalRecord[]> => {
+    const response = await fetch(`${BASE_URL}/doctors/medical-records`, {
+      headers: getHeaders(token),
+    });
+    const data = await handleResponse(response);
+    return data.data || data || [];
+  },
+
+  // Get doctor's prescriptions
+  getPrescriptions: async (token: string): Promise<Prescription[]> => {
+    const response = await fetch(`${BASE_URL}/doctors/prescriptions`, {
+      headers: getHeaders(token),
+    });
+    const data = await handleResponse(response);
+    return data.data || data || [];
+  },
+
+  // Get doctor's lab tests
+  getLabTests: async (token: string): Promise<LabTest[]> => {
+    const response = await fetch(`${BASE_URL}/doctors/lab-tests`, {
+      headers: getHeaders(token),
+    });
+    const data = await handleResponse(response);
+    return data.data || data || [];
+  },
     getMyProfile: async (token: string): Promise<Doctor> => {
       const response = await fetch(`${BASE_URL}/doctors/profile/me`, {
         headers: getHeaders(token),
@@ -365,28 +401,17 @@ export const api = {
       return handleResponse(response);
     },
 
-// In api.ts, update the addMedicalRecord function:
+// In api.ts
 addMedicalRecord: async (token: string, patientId: number, recordData: any) => {
-  // If recordData is FormData, send as multipart
-  if (recordData instanceof FormData) {
-    const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        // Don't set Content-Type for FormData - browser will set it with boundary
-      },
-      body: recordData,
-    });
-    return handleResponse(response);
-  } else {
-    // If it's a regular object, send as JSON
-    const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
-      method: 'POST',
-      headers: getHeaders(token),
-      body: JSON.stringify(recordData),
-    });
-    return handleResponse(response);
-  }
+  const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(recordData),
+  });
+  return handleResponse(response);
 },
 
 getAllLaboratories: async (token: string): Promise<Laboratory[]> => {
@@ -519,28 +544,6 @@ getAllLaboratories: async (token: string): Promise<Laboratory[]> => {
       return handleResponse(response);
     },
 
-    // Patient Management (doctor-specific)
-// In your api.ts doctor.getPatients function:
-getPatients: async (token: string): Promise<Patient[]> => {
-  const response = await fetch(`${BASE_URL}/doctors/patients`, {
-    headers: getHeaders(token),
-  });
-  const data = await handleResponse(response);
-  
-  // Handle different response structures
-  if (data.data && data.data.patients) {
-    return data.data.patients;  // New structure with pagination
-  } else if (data.patients) {
-    return data.patients;  // Alternative structure
-  } else if (Array.isArray(data)) {
-    return data;  // Direct array response
-  } else if (data.data && Array.isArray(data.data)) {
-    return data.data;  // Data property contains array
-  } else {
-    console.warn('Unexpected response structure for getPatients:', data);
-    return [];
-  }
-},
     searchPatients: async (token: string, searchParams: any) => {
       const query = new URLSearchParams(searchParams).toString();
       const response = await fetch(`${BASE_URL}/doctors/patients/search?${query}`, {

@@ -21,15 +21,21 @@ interface Patient {
     first_name: string;
     last_name: string;
     email: string;
+    phone?: string;
   };
+  date_of_birth?: string;
+  blood_type?: string;
 }
 
 interface Laboratory {
   id: number;
   lab_name: string;
+  name?: string; // Some endpoints might use 'name' instead of 'lab_name'
   address?: string;
   phone?: string;
   email?: string;
+  is_approved: boolean;
+  specialization?: string;
 }
 
 interface OrderLabTestProps {
@@ -55,7 +61,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedLab, setSelectedLab] = useState<Laboratory | null>(null);
   const [showPatientSearch, setShowPatientSearch] = useState(true);
-  const [showLabSearch, setShowLabSearch] = useState(true);
+  const [showLabSearch, setShowLabSearch] = useState(false);
   
   const [formData, setFormData] = useState({
     test_name: '',
@@ -66,6 +72,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
   });
   
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -73,18 +80,31 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [patientsData, labsData] = await Promise.all([
-          api.doctor.getPatients(token),
-          api.doctor.getLaboratories(token)
-        ]);
+        setLoadingData(true);
+        const patientsData = await api.doctor.getPatients(token);
+        const labsData = await api.doctor.getAllLaboratories?.(token) || 
+                        await api.laboratory.getAllLaboratories?.(token) || 
+                        [];
         
-        setPatients(patientsData);
-        setFilteredPatients(patientsData);
-        setLaboratories(labsData);
-        setFilteredLabs(labsData);
+        console.log('Patients data:', patientsData);
+        console.log('Labs data:', labsData);
+        
+        // Handle different response structures
+        const patientsArray = Array.isArray(patientsData) ? patientsData : 
+                            patientsData?.data?.patients || patientsData?.patients || [];
+        
+        const labsArray = Array.isArray(labsData) ? labsData : 
+                         labsData?.data || labsData || [];
+        
+        setPatients(patientsArray);
+        setFilteredPatients(patientsArray);
+        setLaboratories(labsArray);
+        setFilteredLabs(labsArray);
       } catch (err) {
         console.error('Failed to load data:', err);
         setError('Failed to load required data');
+      } finally {
+        setLoadingData(false);
       }
     };
 
@@ -96,11 +116,15 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
     if (patientSearch.trim() === '') {
       setFilteredPatients(patients);
     } else {
-      const filtered = patients.filter(patient => 
-        patient.user.first_name.toLowerCase().includes(patientSearch.toLowerCase()) ||
-        patient.user.last_name.toLowerCase().includes(patientSearch.toLowerCase()) ||
-        patient.user.email.toLowerCase().includes(patientSearch.toLowerCase())
-      );
+      const filtered = patients.filter(patient => {
+        if (!patient?.user) return false;
+        return (
+          patient.user.first_name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+          patient.user.last_name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+          patient.user.email?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+          patient.user.phone?.toLowerCase().includes(patientSearch.toLowerCase())
+        );
+      });
       setFilteredPatients(filtered);
     }
   }, [patientSearch, patients]);
@@ -110,11 +134,14 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
     if (labSearch.trim() === '') {
       setFilteredLabs(laboratories);
     } else {
-      const filtered = laboratories.filter(lab => 
-        lab.lab_name.toLowerCase().includes(labSearch.toLowerCase()) ||
-        (lab.address?.toLowerCase() || '').includes(labSearch.toLowerCase()) ||
-        (lab.phone?.toLowerCase() || '').includes(labSearch.toLowerCase())
-      );
+      const filtered = laboratories.filter(lab => {
+        const labName = lab.lab_name || lab.name || '';
+        return (
+          labName.toLowerCase().includes(labSearch.toLowerCase()) ||
+          lab.address?.toLowerCase().includes(labSearch.toLowerCase()) ||
+          lab.phone?.toLowerCase().includes(labSearch.toLowerCase())
+        );
+      });
       setFilteredLabs(filtered);
     }
   }, [labSearch, laboratories]);
@@ -122,6 +149,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
     setShowPatientSearch(false);
+    setShowLabSearch(true);
   };
 
   const handleLabSelect = (lab: Laboratory) => {
@@ -160,7 +188,10 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
         status: 'pending'
       };
 
-      await api.doctor.orderLabTest(token, labTestData);
+      console.log('Submitting lab test data:', labTestData);
+      
+      // Use the correct API endpoint
+      await api.doctor.createLabTest(token, labTestData);
       
       setSuccess('Lab test ordered successfully!');
       setTimeout(() => {
@@ -169,6 +200,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       }, 1500);
       
     } catch (err: any) {
+      console.error('Submission error:', err);
       setError(err.message || 'Failed to order lab test');
     } finally {
       setLoading(false);
@@ -186,11 +218,21 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       priority: 'routine'
     });
     setShowPatientSearch(true);
-    setShowLabSearch(true);
+    setShowLabSearch(false);
+  };
+
+  // Get lab display name
+  const getLabDisplayName = (lab: Laboratory) => {
+    return lab.lab_name || lab.name || 'Unnamed Laboratory';
+  };
+
+  // Get lab display address
+  const getLabDisplayAddress = (lab: Laboratory) => {
+    return lab.address || 'No address provided';
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-100 dark:border-slate-700">
+    <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-xl font-bold text-slate-800 dark:text-white">
           Order Lab Test
@@ -223,8 +265,16 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
         </div>
       )}
 
+      {/* Loading state for data */}
+      {loadingData && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-secondary" />
+          <span className="ml-2 text-slate-600 dark:text-slate-400">Loading data...</span>
+        </div>
+      )}
+
       {/* Patient Selection */}
-      {showPatientSearch && (
+      {!loadingData && showPatientSearch && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">
             Select Patient *
@@ -263,6 +313,11 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
                       <p className="text-sm text-slate-500 dark:text-slate-400">
                         {patient.user.email}
                       </p>
+                      {patient.user.phone && (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          {patient.user.phone}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -273,7 +328,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       )}
 
       {/* Selected Patient */}
-      {selectedPatient && (
+      {!loadingData && selectedPatient && !showPatientSearch && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -287,6 +342,11 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   {selectedPatient.user.email}
                 </p>
+                {selectedPatient.date_of_birth && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    DOB: {new Date(selectedPatient.date_of_birth).toLocaleDateString()}
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -303,7 +363,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       )}
 
       {/* Laboratory Selection */}
-      {selectedPatient && showLabSearch && (
+      {!loadingData && selectedPatient && showLabSearch && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">
             Select Laboratory *
@@ -335,16 +395,21 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
                     <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
                       <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-slate-800 dark:text-white">
-                        {lab.lab_name}
+                        {getLabDisplayName(lab)}
                       </p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        {lab.address}
+                        {getLabDisplayAddress(lab)}
                       </p>
                       {lab.phone && (
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                          {lab.phone}
+                          📞 {lab.phone}
+                        </p>
+                      )}
+                      {lab.specialization && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Specialization: {lab.specialization}
                         </p>
                       )}
                     </div>
@@ -357,7 +422,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       )}
 
       {/* Selected Laboratory */}
-      {selectedLab && (
+      {!loadingData && selectedLab && !showLabSearch && (
         <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -366,11 +431,16 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
               </div>
               <div>
                 <p className="font-medium text-slate-800 dark:text-white">
-                  {selectedLab.lab_name}
+                  {getLabDisplayName(selectedLab)}
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {selectedLab.address}
+                  {getLabDisplayAddress(selectedLab)}
                 </p>
+                {selectedLab.phone && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    📞 {selectedLab.phone}
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -387,7 +457,7 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
       )}
 
       {/* Test Details Form */}
-      {selectedPatient && selectedLab && (
+      {!loadingData && selectedPatient && selectedLab && !showLabSearch && (
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
@@ -398,7 +468,8 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
               value={formData.test_name}
               onChange={(e) => setFormData({...formData, test_name: e.target.value})}
               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
-              placeholder="e.g., Complete Blood Count (CBC), Lipid Profile"
+              placeholder="e.g., Complete Blood Count (CBC), Lipid Profile, Urine Culture"
+              required
             />
           </div>
 
@@ -414,12 +485,13 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
               >
                 <option value="blood_test">Blood Test</option>
                 <option value="urinalysis">Urinalysis</option>
-                <option value="imaging">Imaging</option>
+                <option value="imaging">Imaging (X-ray, MRI, CT)</option>
                 <option value="biopsy">Biopsy</option>
-                <option value="culture">Culture</option>
+                <option value="culture">Culture Test</option>
                 <option value="genetic">Genetic Test</option>
                 <option value="allergy">Allergy Test</option>
                 <option value="hormone">Hormone Test</option>
+                <option value="covid_test">COVID-19 Test</option>
                 <option value="other">Other</option>
               </select>
             </div>
@@ -433,8 +505,8 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
                 onChange={(e) => setFormData({...formData, priority: e.target.value})}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
               >
-                <option value="routine">Routine</option>
-                <option value="urgent">Urgent</option>
+                <option value="routine">Routine (Normal)</option>
+                <option value="urgent">Urgent (Within 24 hours)</option>
                 <option value="stat">STAT (Immediate)</option>
               </select>
             </div>
@@ -463,21 +535,21 @@ export const OrderLabTest: React.FC<OrderLabTestProps> = ({
               value={formData.test_instructions}
               onChange={(e) => setFormData({...formData, test_instructions: e.target.value})}
               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[80px]"
-              placeholder="Special instructions for the laboratory..."
+              placeholder="Special instructions for the laboratory, patient preparation requirements, etc."
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
             <button
               onClick={resetForm}
-              className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg"
+              className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900"
               disabled={loading}
             >
               Clear
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !formData.test_name.trim()}
               className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               {loading ? (

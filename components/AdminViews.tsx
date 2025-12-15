@@ -15,7 +15,7 @@ export const AdminDashboard: React.FC<ViewProps> = ({ token }) => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await api.admin.getStats(token);
+        const data = await api.admin.getSystemStatistics(token);
         setStats(data);
       } catch (e) {
         console.error("Failed to load stats", e);
