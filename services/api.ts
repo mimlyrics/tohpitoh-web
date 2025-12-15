@@ -317,19 +317,218 @@ export const api = {
 
   // ==================== DOCTOR ENDPOINTS ====================
   doctor: {
-    getMyProfile: async (token: string): Promise<Doctor> => {
-      const response = await fetch(`${BASE_URL}/doctors/profile/me`, {
+
+    getMyProfile: async (token: string): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/profile/me`, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
+    },
+
+    updateMyProfile: async (token: string, profileData: any): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/profile/me`, {
+        method: 'PUT',
+        headers: getHeaders(token),
+        body: JSON.stringify(profileData),
+      });
+      return handleResponse(response);
+    },
+
+    // Patient Management - Can access any patient if approved
+    getPatients: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort_by?: string;
+      has_medical_records?: boolean;
+    }): Promise<Patient[]> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.sort_by) queryParams.append('sort_by', params.sort_by);
+        if (params.has_medical_records !== undefined) 
+          queryParams.append('has_medical_records', params.has_medical_records.toString());
+      }
+
+      const url = `${BASE_URL}/doctor/patients${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data?.patients || data.data || [];
+    },
+
+    // Get patients the doctor has worked with
+    getMyPatients: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      sort_by?: string;
+    }): Promise<Patient[]> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.sort_by) queryParams.append('sort_by', params.sort_by);
+      }
+
+      const url = `${BASE_URL}/doctor/patients/my${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data?.patients || data.data || [];
+    },
+
+    searchPatients: async (token: string, query: string): Promise<Patient[]> => {
+      const response = await fetch(`${BASE_URL}/doctor/patients/search?q=${encodeURIComponent(query)}`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
+    },
+
+    getPatientById: async (token: string, patientId: number): Promise<Patient> => {
+      const response = await fetch(`${BASE_URL}/doctor/patients/${patientId}`, {
         headers: getHeaders(token),
       });
       const data = await handleResponse(response);
       return data.data || data;
     },
 
-    updateMyProfile: async (token: string, profileData: any) => {
-      const response = await fetch(`${BASE_URL}/doctors/profile/me`, {
-        method: 'PUT',
+    // Medical Records
+    getMedicalRecords: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      patient_id?: number;
+      record_type?: string;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<MedicalRecord[]> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
+        if (params.record_type) queryParams.append('record_type', params.record_type);
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+      }
+
+      const url = `${BASE_URL}/doctor/medical-records${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
         headers: getHeaders(token),
-        body: JSON.stringify(profileData),
+      });
+      const data = await handleResponse(response);
+      return data.data?.records || data.data || [];
+    },
+
+    createMedicalRecord: async (token: string, formData: FormData): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/medical-records`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Don't set Content-Type for FormData, let browser set it
+        },
+        body: formData,
+      });
+      return handleResponse(response);
+    },
+
+    // Prescriptions
+    getDoctorPrescriptions: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      patient_id?: number;
+      is_active?: boolean;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<Prescription[]> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
+        if (params.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+      }
+
+      const url = `${BASE_URL}/doctor/prescriptions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data?.prescriptions || data.data || [];
+    },
+
+    createPrescription: async (token: string, prescriptionData: any): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/prescriptions`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(prescriptionData),
+      });
+      return handleResponse(response);
+    },
+
+    // Lab Tests
+    getDoctorLabTests: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      patient_id?: number;
+      status?: string;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<LabTest[]> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
+        if (params.status) queryParams.append('status', params.status);
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+      }
+
+      const url = `${BASE_URL}/doctor/lab-tests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data?.labTests || data.data || [];
+    },
+
+    getLaboratories: async (token: string): Promise<Laboratory[]> => {
+      const response = await fetch(`${BASE_URL}/doctor/laboratories`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
+    },
+
+    orderLabTest: async (token: string, labTestData: any): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/lab-tests`, {
+        method: 'POST',
+        headers: getHeaders(token),
+        body: JSON.stringify(labTestData),
+      });
+      return handleResponse(response);
+    },
+
+    // Statistics
+    getMedicalRecordStats: async (token: string): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/stats/medical-records`, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
+    },
+
+    getPrescriptionStats: async (token: string): Promise<any> => {
+      const response = await fetch(`${BASE_URL}/doctor/stats/prescriptions`, {
+        headers: getHeaders(token),
       });
       return handleResponse(response);
     },
@@ -342,13 +541,6 @@ export const api = {
       });
       const data = await handleResponse(response);
       return data.data || data || [];
-    },
-
-    getMedicalRecordStats: async (token: string) => {
-      const response = await fetch(`${BASE_URL}/doctors/medical-records/stats`, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
     },
 
     getMedicalRecordById: async (token: string, recordId: number) => {
@@ -595,6 +787,87 @@ export const api = {
 
   // ==================== ADMIN ENDPOINTS ====================
   admin: {
+
+    // Medical Records
+    getAllMedicalRecords: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      record_type?: string;
+      start_date?: string;
+      end_date?: string;
+      is_shared?: boolean;
+    }): Promise<any> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.record_type) queryParams.append('record_type', params.record_type);
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+        if (params.is_shared !== undefined) queryParams.append('is_shared', params.is_shared.toString());
+      }
+
+      const url = `${BASE_URL}/admin/medical-records${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
+    },
+
+    // Prescriptions
+    getAllPrescriptions: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      is_active?: boolean;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<any> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+      }
+
+      const url = `${BASE_URL}/admin/prescriptions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
+    },
+
+    // Lab Tests
+    getAllLabTests: async (token: string, params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: string;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<any> => {
+      const queryParams = new URLSearchParams();
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.status) queryParams.append('status', params.status);
+        if (params.start_date) queryParams.append('start_date', params.start_date);
+        if (params.end_date) queryParams.append('end_date', params.end_date);
+      }
+
+      const url = `${BASE_URL}/admin/lab-tests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await fetch(url, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
+    },
+
     // Dashboard & Statistics
     getDashboardStats: async (token: string): Promise<AdminStats> => {
       // Using /admin/statistics as per your routes
