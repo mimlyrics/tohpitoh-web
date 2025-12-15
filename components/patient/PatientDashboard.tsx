@@ -214,76 +214,77 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({ activeTab })
     doc.save(`Patient_Profile_${userProfile?.user.first_name}_${userProfile?.user.last_name}.pdf`);
   };
 
-  const generateHealthSummaryPDF = () => {
-    const doc = new jsPDF();
-    let yPos = 20;
-    
-    // Header
-    doc.setFontSize(24);
-    doc.setTextColor(40, 53, 147);
-    doc.text('HEALTH SUMMARY', 105, yPos, { align: 'center' });
-    yPos += 15;
-    
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`${userProfile?.user.first_name} ${userProfile?.user.last_name}`, 105, yPos, { align: 'center' });
+const generateHealthSummaryPDF = () => {
+  const doc = new jsPDF();
+  let yPos = 20;
+  
+  // Header
+  doc.setFontSize(24);
+  doc.setTextColor(40, 53, 147);
+  doc.text('HEALTH SUMMARY', 105, yPos, { align: 'center' });
+  yPos += 15;
+  
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`${userProfile?.user.first_name} ${userProfile?.user.last_name}`, 105, yPos, { align: 'center' });
+  yPos += 10;
+  
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 105, yPos, { align: 'center' });
+  yPos += 20;
+  
+  // Quick Stats - Simple table without autoTable
+  doc.setFontSize(16);
+  doc.text('Overview', 14, yPos);
+  yPos += 10;
+  
+  doc.setFontSize(11);
+  
+  // Create a simple table manually
+  const statsData = [
+    ['Total Medical Records', stats.totalRecords.toString()],
+    ['Active Prescriptions', stats.activePrescriptions.toString()],
+    ['Pending Lab Tests', stats.pendingTests.toString()],
+    ['Shared Records', stats.sharedRecords.toString()]
+  ];
+  
+  let tableY = yPos;
+  statsData.forEach(([metric, count], index) => {
+    doc.text(metric, 14, tableY);
+    doc.text(count, 160, tableY, { align: 'right' });
+    tableY += 8;
+  });
+  
+  yPos = tableY + 15;
+  
+  // Recent Medical Records (limit to show without autoTable)
+  if (medicalRecords.length > 0) {
+    doc.setFontSize(16);
+    doc.text('Recent Medical Records', 14, yPos);
     yPos += 10;
     
     doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 105, yPos, { align: 'center' });
-    yPos += 20;
-    
-    // Quick Stats
-    doc.setFontSize(16);
-    doc.text('Overview', 14, yPos);
-    yPos += 10;
-    
-    doc.setFontSize(11);
-    (doc as any).autoTable({
-      startY: yPos,
-      head: [['Metric', 'Count']],
-      body: [
-        ['Total Medical Records', stats.totalRecords.toString()],
-        ['Active Prescriptions', stats.activePrescriptions.toString()],
-        ['Pending Lab Tests', stats.pendingTests.toString()],
-        ['Shared Records', stats.sharedRecords.toString()]
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [40, 53, 147] }
+    medicalRecords.slice(0, 5).forEach((record, index) => {
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      doc.text(`${index + 1}. ${record.title}`, 14, yPos);
+      doc.setFontSize(8);
+      doc.text(`${formatDate(record.date)} • ${record.record_type}`, 20, yPos + 5);
+      yPos += 12;
     });
-    
-    yPos = (doc as any).lastAutoTable.finalY + 20;
-    
-    // Recent Medical Records
-    if (medicalRecords.length > 0) {
-      doc.setFontSize(16);
-      doc.text('Recent Medical Records', 14, yPos);
-      yPos += 10;
-      
-      const recordsTable = medicalRecords.slice(0, 10).map(record => [
-        formatDate(record.date),
-        record.record_type,
-        record.title,
-        record.doctor ? `Dr. ${record.doctor.first_name}` : 'Unknown'
-      ]);
-      
-      (doc as any).autoTable({
-        startY: yPos,
-        head: [['Date', 'Type', 'Title', 'Doctor']],
-        body: recordsTable,
-        theme: 'grid',
-        headStyles: { fillColor: [59, 130, 246] }
-      });
-    }
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.text('This is a summary document. For complete records, consult your healthcare provider.', 
-      105, 280, { align: 'center' });
-    
-    doc.save(`Health_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
+  }
+  
+  // Footer
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text('This is a summary document. For complete records, consult your healthcare provider.', 
+    105, 280, { align: 'center' });
+  
+  doc.save(`Health_Summary_${new Date().toISOString().split('T')[0]}.pdf`);
+};
 
   // ==================== RENDER FUNCTIONS ====================
 
