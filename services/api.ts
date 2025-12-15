@@ -1,4 +1,4 @@
-// services/api.ts (COMPLETE CORRECTED VERSION)
+// services/api.ts (COMPLETE UPDATED VERSION)
 import { 
   MedicalRecord, 
   FullProfile, 
@@ -97,19 +97,13 @@ export const api = {
   },
 
   // ==================== USER PROFILE ====================
-  // Note: There's no /jwt/profile endpoint. Use patient/doctor/lab endpoints instead.
   getCurrentUser: async (token: string): Promise<User> => {
-    // This is a placeholder - you'll need to implement getUser endpoint
-    // For now, we'll get profile based on role
     try {
-      // Try to get user info from auth response stored in localStorage
       const authData = localStorage.getItem('authData');
       if (authData) {
         return JSON.parse(authData).user;
       }
       
-      // If no stored data, you might need to hit an endpoint like /users/me
-      // For now, return basic info
       return {
         id: 0,
         first_name: '',
@@ -127,14 +121,12 @@ export const api = {
   },
 
   getFullProfile: async (token: string): Promise<FullProfile> => {
-    // Get user from token or stored data
     const userData = await api.getCurrentUser(token);
     
     let patientData: Patient | null = null;
     let doctorData: Doctor | null = null;
     let laboratoryData: Laboratory | null = null;
     
-    // Based on role, fetch specific profile
     try {
       switch (userData.role) {
         case 'patient':
@@ -280,7 +272,6 @@ export const api = {
       return handleResponse(response);
     },
 
-    // Access Permissions
     getGrantedAccesses: async (token: string) => {
       const response = await fetch(`${BASE_URL}/patients/granted-accesses`, {
         headers: getHeaders(token),
@@ -305,7 +296,6 @@ export const api = {
       return handleResponse(response);
     },
 
-    // Available Doctors for Patients
     getAllDoctors: async (token: string): Promise<Doctor[]> => {
       const response = await fetch(`${BASE_URL}/doctors`, {
         headers: getHeaders(token),
@@ -317,218 +307,19 @@ export const api = {
 
   // ==================== DOCTOR ENDPOINTS ====================
   doctor: {
-
-    getMyProfile: async (token: string): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/profile/me`, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
-    },
-
-    updateMyProfile: async (token: string, profileData: any): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/profile/me`, {
-        method: 'PUT',
-        headers: getHeaders(token),
-        body: JSON.stringify(profileData),
-      });
-      return handleResponse(response);
-    },
-
-    // Patient Management - Can access any patient if approved
-    getPatients: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort_by?: string;
-      has_medical_records?: boolean;
-    }): Promise<Patient[]> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.search) queryParams.append('search', params.search);
-        if (params.sort_by) queryParams.append('sort_by', params.sort_by);
-        if (params.has_medical_records !== undefined) 
-          queryParams.append('has_medical_records', params.has_medical_records.toString());
-      }
-
-      const url = `${BASE_URL}/doctor/patients${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data?.patients || data.data || [];
-    },
-
-    // Get patients the doctor has worked with
-    getMyPatients: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      sort_by?: string;
-    }): Promise<Patient[]> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.search) queryParams.append('search', params.search);
-        if (params.sort_by) queryParams.append('sort_by', params.sort_by);
-      }
-
-      const url = `${BASE_URL}/doctor/patients/my${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data?.patients || data.data || [];
-    },
-
-    searchPatients: async (token: string, query: string): Promise<Patient[]> => {
-      const response = await fetch(`${BASE_URL}/doctor/patients/search?q=${encodeURIComponent(query)}`, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data || data || [];
-    },
-
-    getPatientById: async (token: string, patientId: number): Promise<Patient> => {
-      const response = await fetch(`${BASE_URL}/doctor/patients/${patientId}`, {
+    getMyProfile: async (token: string): Promise<Doctor> => {
+      const response = await fetch(`${BASE_URL}/doctors/profile/me`, {
         headers: getHeaders(token),
       });
       const data = await handleResponse(response);
       return data.data || data;
     },
 
-    // Medical Records
-    getMedicalRecords: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      patient_id?: number;
-      record_type?: string;
-      start_date?: string;
-      end_date?: string;
-    }): Promise<MedicalRecord[]> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
-        if (params.record_type) queryParams.append('record_type', params.record_type);
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-      }
-
-      const url = `${BASE_URL}/doctor/medical-records${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
+    updateMyProfile: async (token: string, profileData: any) => {
+      const response = await fetch(`${BASE_URL}/doctors/profile/me`, {
+        method: 'PUT',
         headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data?.records || data.data || [];
-    },
-
-    createMedicalRecord: async (token: string, formData: FormData): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/medical-records`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          // Don't set Content-Type for FormData, let browser set it
-        },
-        body: formData,
-      });
-      return handleResponse(response);
-    },
-
-    // Prescriptions
-    getDoctorPrescriptions: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      patient_id?: number;
-      is_active?: boolean;
-      start_date?: string;
-      end_date?: string;
-    }): Promise<Prescription[]> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
-        if (params.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-      }
-
-      const url = `${BASE_URL}/doctor/prescriptions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data?.prescriptions || data.data || [];
-    },
-
-    createPrescription: async (token: string, prescriptionData: any): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/prescriptions`, {
-        method: 'POST',
-        headers: getHeaders(token),
-        body: JSON.stringify(prescriptionData),
-      });
-      return handleResponse(response);
-    },
-
-    // Lab Tests
-    getDoctorLabTests: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      patient_id?: number;
-      status?: string;
-      start_date?: string;
-      end_date?: string;
-    }): Promise<LabTest[]> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.patient_id) queryParams.append('patient_id', params.patient_id.toString());
-        if (params.status) queryParams.append('status', params.status);
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-      }
-
-      const url = `${BASE_URL}/doctor/lab-tests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data?.labTests || data.data || [];
-    },
-
-    getLaboratories: async (token: string): Promise<Laboratory[]> => {
-      const response = await fetch(`${BASE_URL}/doctor/laboratories`, {
-        headers: getHeaders(token),
-      });
-      const data = await handleResponse(response);
-      return data.data || data || [];
-    },
-
-    orderLabTest: async (token: string, labTestData: any): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/lab-tests`, {
-        method: 'POST',
-        headers: getHeaders(token),
-        body: JSON.stringify(labTestData),
-      });
-      return handleResponse(response);
-    },
-
-    // Statistics
-    getMedicalRecordStats: async (token: string): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/stats/medical-records`, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
-    },
-
-    getPrescriptionStats: async (token: string): Promise<any> => {
-      const response = await fetch(`${BASE_URL}/doctor/stats/prescriptions`, {
-        headers: getHeaders(token),
+        body: JSON.stringify(profileData),
       });
       return handleResponse(response);
     },
@@ -541,6 +332,13 @@ export const api = {
       });
       const data = await handleResponse(response);
       return data.data || data || [];
+    },
+
+    getMedicalRecordStats: async (token: string) => {
+      const response = await fetch(`${BASE_URL}/doctors/medical-records/stats`, {
+        headers: getHeaders(token),
+      });
+      return handleResponse(response);
     },
 
     getMedicalRecordById: async (token: string, recordId: number) => {
@@ -567,14 +365,37 @@ export const api = {
       return handleResponse(response);
     },
 
-    addMedicalRecord: async (token: string, patientId: number, recordData: any) => {
-      const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
-        method: 'POST',
-        headers: getHeaders(token),
-        body: JSON.stringify(recordData),
-      });
-      return handleResponse(response);
-    },
+// In api.ts, update the addMedicalRecord function:
+addMedicalRecord: async (token: string, patientId: number, recordData: any) => {
+  // If recordData is FormData, send as multipart
+  if (recordData instanceof FormData) {
+    const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type for FormData - browser will set it with boundary
+      },
+      body: recordData,
+    });
+    return handleResponse(response);
+  } else {
+    // If it's a regular object, send as JSON
+    const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
+      method: 'POST',
+      headers: getHeaders(token),
+      body: JSON.stringify(recordData),
+    });
+    return handleResponse(response);
+  }
+},
+
+getAllLaboratories: async (token: string): Promise<Laboratory[]> => {
+  const response = await fetch(`${BASE_URL}/laboratories`, {
+    headers: getHeaders(token),
+  });
+  const data = await handleResponse(response);
+  return data.data || data || [];
+},
 
     getPatientMedicalRecords: async (token: string, patientId: number) => {
       const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}/medical-records`, {
@@ -698,6 +519,45 @@ export const api = {
       return handleResponse(response);
     },
 
+    // Patient Management (doctor-specific)
+// In your api.ts doctor.getPatients function:
+getPatients: async (token: string): Promise<Patient[]> => {
+  const response = await fetch(`${BASE_URL}/doctors/patients`, {
+    headers: getHeaders(token),
+  });
+  const data = await handleResponse(response);
+  
+  // Handle different response structures
+  if (data.data && data.data.patients) {
+    return data.data.patients;  // New structure with pagination
+  } else if (data.patients) {
+    return data.patients;  // Alternative structure
+  } else if (Array.isArray(data)) {
+    return data;  // Direct array response
+  } else if (data.data && Array.isArray(data.data)) {
+    return data.data;  // Data property contains array
+  } else {
+    console.warn('Unexpected response structure for getPatients:', data);
+    return [];
+  }
+},
+    searchPatients: async (token: string, searchParams: any) => {
+      const query = new URLSearchParams(searchParams).toString();
+      const response = await fetch(`${BASE_URL}/doctors/patients/search?${query}`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
+    },
+
+    getPatientById: async (token: string, patientId: number): Promise<Patient> => {
+      const response = await fetch(`${BASE_URL}/doctors/patients/${patientId}`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data;
+    },
+
     getAllDoctors: async (token: string): Promise<Doctor[]> => {
       const response = await fetch(`${BASE_URL}/doctors`, {
         headers: getHeaders(token),
@@ -787,107 +647,25 @@ export const api = {
 
   // ==================== ADMIN ENDPOINTS ====================
   admin: {
-
-    // Medical Records
-    getAllMedicalRecords: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      record_type?: string;
-      start_date?: string;
-      end_date?: string;
-      is_shared?: boolean;
-    }): Promise<any> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.search) queryParams.append('search', params.search);
-        if (params.record_type) queryParams.append('record_type', params.record_type);
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-        if (params.is_shared !== undefined) queryParams.append('is_shared', params.is_shared.toString());
-      }
-
-      const url = `${BASE_URL}/admin/medical-records${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
-    },
-
-    // Prescriptions
-    getAllPrescriptions: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      is_active?: boolean;
-      start_date?: string;
-      end_date?: string;
-    }): Promise<any> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.search) queryParams.append('search', params.search);
-        if (params.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-      }
-
-      const url = `${BASE_URL}/admin/prescriptions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
-    },
-
-    // Lab Tests
-    getAllLabTests: async (token: string, params?: {
-      page?: number;
-      limit?: number;
-      search?: string;
-      status?: string;
-      start_date?: string;
-      end_date?: string;
-    }): Promise<any> => {
-      const queryParams = new URLSearchParams();
-      if (params) {
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.limit) queryParams.append('limit', params.limit.toString());
-        if (params.search) queryParams.append('search', params.search);
-        if (params.status) queryParams.append('status', params.status);
-        if (params.start_date) queryParams.append('start_date', params.start_date);
-        if (params.end_date) queryParams.append('end_date', params.end_date);
-      }
-
-      const url = `${BASE_URL}/admin/lab-tests${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-      const response = await fetch(url, {
-        headers: getHeaders(token),
-      });
-      return handleResponse(response);
-    },
-
     // Dashboard & Statistics
     getDashboardStats: async (token: string): Promise<AdminStats> => {
-      // Using /admin/statistics as per your routes
       const response = await fetch(`${BASE_URL}/admin/statistics`, {
         headers: getHeaders(token),
       });
       const data = await handleResponse(response);
-    return {
-      totalUsers: data.data?.totalUsers || 0,
-      totalPatients: data.data?.totalPatients || 0,
-      totalDoctors: data.data?.totalDoctors || 0,
-      totalLabs: data.data?.totalLaboratories || 0,
-      totalMedicalRecords: data.data?.totalMedicalRecords || 0,
-      totalPrescriptions: data.data?.totalPrescriptions || 0,
-      totalLabTests: data.data?.totalLabTests || 0,
-      pendingApprovals: 0, // You might need a separate endpoint for this
-      activeRecords: data.data?.totalActiveAccesses || 0,
-      todayActivity: 0, // You might need a separate endpoint for this
-      verifiedProfessionals: data.data?.totalDoctors + data.data?.totalLaboratories || 0
-    };
+      return {
+        totalUsers: data.data?.totalUsers || 0,
+        totalPatients: data.data?.totalPatients || 0,
+        totalDoctors: data.data?.totalDoctors || 0,
+        totalLabs: data.data?.totalLaboratories || 0,
+        totalMedicalRecords: data.data?.totalMedicalRecords || 0,
+        totalPrescriptions: data.data?.totalPrescriptions || 0,
+        totalLabTests: data.data?.totalLabTests || 0,
+        pendingApprovals: 0,
+        activeRecords: data.data?.totalActiveAccesses || 0,
+        todayActivity: 0,
+        verifiedProfessionals: data.data?.totalDoctors + data.data?.totalLaboratories || 0
+      };
     },
 
     getSystemStatistics: async (token: string): Promise<AdminStats> => {
@@ -896,6 +674,33 @@ export const api = {
       });
       const data = await handleResponse(response);
       return data.data || data;
+    },
+
+    // Medical Records Management
+    getAllMedicalRecords: async (token: string): Promise<MedicalRecord[]> => {
+      const response = await fetch(`${BASE_URL}/admin/medical-records`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
+    },
+
+    // Prescriptions Management
+    getAllPrescriptions: async (token: string): Promise<Prescription[]> => {
+      const response = await fetch(`${BASE_URL}/admin/prescriptions`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
+    },
+
+    // Lab Tests Management
+    getAllLabTests: async (token: string): Promise<LabTest[]> => {
+      const response = await fetch(`${BASE_URL}/admin/lab-tests`, {
+        headers: getHeaders(token),
+      });
+      const data = await handleResponse(response);
+      return data.data || data || [];
     },
 
     // User Management

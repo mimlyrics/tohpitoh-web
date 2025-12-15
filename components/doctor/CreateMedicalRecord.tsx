@@ -10,7 +10,10 @@ import {
   Stethoscope,
   AlertCircle,
   Check,
-  Loader2
+  Loader2,
+  Building,
+  MapPin,
+  Phone
 } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -27,6 +30,16 @@ interface Patient {
   blood_type?: string;
 }
 
+interface Laboratory {
+  id: number;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  is_approved: boolean;
+  specialization?: string;
+}
+
 interface CreateMedicalRecordProps {
   token: string;
   doctorId: number;
@@ -41,10 +54,15 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
   onClose
 }) => {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [laboratories, setLaboratories] = useState<Laboratory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [labSearchTerm, setLabSearchTerm] = useState('');
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
+  const [filteredLabs, setFilteredLabs] = useState<Laboratory[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedLab, setSelectedLab] = useState<Laboratory | null>(null);
   const [showPatientSearch, setShowPatientSearch] = useState(true);
+  const [showLabSearch, setShowLabSearch] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -56,6 +74,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
   
   const [attachment, setAttachment] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingLabs, setLoadingLabs] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -64,8 +83,8 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
     const loadPatients = async () => {
       try {
         const patientsData = await api.doctor.getPatients(token);
-        setPatients(patientsData);
-        setFilteredPatients(patientsData);
+        setPatients(Array.isArray(patientsData) ? patientsData : []);
+        setFilteredPatients(Array.isArray(patientsData) ? patientsData : []);
       } catch (err) {
         console.error('Failed to load patients:', err);
         setError('Failed to load patients list');
@@ -74,6 +93,22 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
 
     loadPatients();
   }, [token]);
+
+  // Load laboratories
+  const loadLaboratories = async () => {
+    try {
+      setLoadingLabs(true);
+      const labsData = await api.doctor.getAllLaboratories?.(token) || await api.laboratory.getAllLaboratories?.(token);
+      if (labsData) {
+        setLaboratories(Array.isArray(labsData) ? labsData : []);
+        setFilteredLabs(Array.isArray(labsData) ? labsData : []);
+      }
+    } catch (err) {
+      console.error('Failed to load laboratories:', err);
+    } finally {
+      setLoadingLabs(false);
+    }
+  };
 
   // Search patients
   useEffect(() => {
@@ -90,9 +125,28 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
     }
   }, [searchTerm, patients]);
 
+  // Search laboratories
+  useEffect(() => {
+    if (labSearchTerm.trim() === '') {
+      setFilteredLabs(laboratories);
+    } else {
+      const filtered = laboratories.filter(lab =>
+        lab.name.toLowerCase().includes(labSearchTerm.toLowerCase()) ||
+        (lab.address?.toLowerCase() || '').includes(labSearchTerm.toLowerCase()) ||
+        (lab.specialization?.toLowerCase() || '').includes(labSearchTerm.toLowerCase())
+      );
+      setFilteredLabs(filtered);
+    }
+  }, [labSearchTerm, laboratories]);
+
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
     setShowPatientSearch(false);
+  };
+
+  const handleLabSelect = (lab: Laboratory) => {
+    setSelectedLab(lab);
+    setShowLabSearch(false);
   };
 
   const handleSubmit = async () => {
@@ -112,18 +166,22 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append('patient_id', selectedPatient.id.toString());
+      
+      // Append form data
       formDataToSend.append('title', formData.title);
       formDataToSend.append('description', formData.description);
       formDataToSend.append('record_type', formData.record_type);
       formDataToSend.append('date', formData.date);
-      formDataToSend.append('doctor_id', doctorId.toString());
       formDataToSend.append('is_shared', formData.is_shared.toString());
+      if (selectedLab) {
+        formDataToSend.append('laboratory_id', selectedLab.id.toString());
+      }
       if (attachment) {
         formDataToSend.append('attachment', attachment);
       }
 
-      await api.doctor.createMedicalRecord(token, formDataToSend);
+      // Pass patientId as separate parameter, not in FormData
+      await api.doctor.addMedicalRecord(token, selectedPatient.id, formDataToSend);
       
       setSuccess('Medical record created successfully!');
       setTimeout(() => {
@@ -140,6 +198,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
 
   const resetForm = () => {
     setSelectedPatient(null);
+    setSelectedLab(null);
     setFormData({
       title: '',
       description: '',
@@ -149,6 +208,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
     });
     setAttachment(null);
     setShowPatientSearch(true);
+    setShowLabSearch(false);
   };
 
   return (
@@ -241,8 +301,8 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
       )}
 
       {/* Selected Patient */}
-      {selectedPatient && (
-        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+      {selectedPatient && !showPatientSearch && (
+        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
@@ -270,8 +330,123 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
         </div>
       )}
 
+      {/* Laboratory Selection */}
+      {selectedPatient && !showPatientSearch && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+              Select Laboratory (Optional)
+            </label>
+            {selectedLab ? (
+              <button
+                onClick={() => {
+                  setSelectedLab(null);
+                  setShowLabSearch(false);
+                }}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              >
+                Change Lab
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowLabSearch(true);
+                  loadLaboratories();
+                }}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              >
+                + Select Laboratory
+              </button>
+            )}
+          </div>
+
+          {selectedLab && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                  <Building className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-slate-800 dark:text-white">
+                    {selectedLab.name}
+                  </p>
+                  {selectedLab.address && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center">
+                      <MapPin className="w-3 h-3 mr-1" />
+                      {selectedLab.address}
+                    </p>
+                  )}
+                  {selectedLab.phone && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center">
+                      <Phone className="w-3 h-3 mr-1" />
+                      {selectedLab.phone}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showLabSearch && (
+            <div className="mt-3">
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-3 text-slate-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search laboratories by name, address, or specialization..."
+                  value={labSearchTerm}
+                  onChange={(e) => setLabSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                />
+              </div>
+
+              <div className="max-h-60 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                {loadingLabs ? (
+                  <div className="p-4 text-center">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
+                  </div>
+                ) : filteredLabs.length === 0 ? (
+                  <div className="p-4 text-center text-slate-500 dark:text-slate-400">
+                    No laboratories found
+                  </div>
+                ) : (
+                  filteredLabs.map(lab => (
+                    <button
+                      key={lab.id}
+                      onClick={() => handleLabSelect(lab)}
+                      className="w-full p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 last:border-b-0"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                          <Building className="w-4 h-4 text-slate-500" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-800 dark:text-white">
+                            {lab.name}
+                          </p>
+                          {lab.specialization && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {lab.specialization}
+                            </p>
+                          )}
+                          {lab.address && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                              {lab.address}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Medical Record Form */}
-      {selectedPatient && (
+      {selectedPatient && !showPatientSearch && !showLabSearch && (
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
@@ -311,6 +486,7 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
               >
                 <option value="consultation">Consultation</option>
                 <option value="diagnosis">Diagnosis</option>
+                <option value="lab_report">Lab Report</option>
                 <option value="prescription">Prescription</option>
                 <option value="vaccination">Vaccination</option>
                 <option value="other">Other</option>

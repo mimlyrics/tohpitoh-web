@@ -41,12 +41,14 @@ export interface Patient {
 export interface Doctor {
   id: number;
   user_id: number;
-  specialization?: string;
-  license_number?: string;
-  hospital_affiliation?: string;
-  is_approved: boolean;
+  specialization: string;
+  license_number: string;
+  hospital_affiliation: string;
+  is_approved: boolean;  // Changed from is_verified
   approved_by_admin_id?: number;
   approved_at?: string;
+  createdAt: string;
+  updatedAt: string;
   user?: User;
 }
 

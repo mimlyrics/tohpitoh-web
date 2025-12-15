@@ -61,56 +61,77 @@ export const DoctorDashboard: React.FC<DoctorDashboardProps> = ({ activeTab }) =
     }
   }, [token, activeTab]);
 
-  const loadDoctorData = async () => {
-    if (!token) return;
-    
-    setLoading(true);
-    try {
-      switch (activeTab) {
-        case 'patients':
-          const patientsData = await api.doctor.getPatients(token);
-          setPatients(patientsData);
-          setStats(prev => ({ ...prev, totalPatients: patientsData.length }));
-          break;
-          
-        case 'consultations':
-          const records = await api.doctor.getMedicalRecords(token);
-          setMedicalRecords(records);
-          break;
-          
-        case 'prescriptions':
-          const prescriptionsData = await api.doctor.getDoctorPrescriptions(token);
-          setPrescriptions(prescriptionsData);
-          break;
-          
-        case 'lab-tests':
-          const testsData = await api.doctor.getDoctorLabTests(token);
-          setLabTests(testsData);
-          break;
-          
-        case 'schedule':
-          // Load appointments/schedule
-          break;
-      }
-      
-    } catch (err) {
-      console.error('Failed to load doctor data:', err);
-    } finally {
-      setLoading(false);
+// Update the loadDoctorData function:
+const loadDoctorData = async () => {
+  if (!token) return;
+  
+  setLoading(true);
+  try {
+    switch (activeTab) {
+      case 'patients':
+        const patientsResponse = await api.doctor.getPatients(token);
+        // Check if response has nested data structure
+        const patientsData = patientsResponse.data?.patients || patientsResponse.patients || patientsResponse;
+        setPatients(Array.isArray(patientsData) ? patientsData : []);
+        setStats(prev => ({ 
+          ...prev, 
+          totalPatients: Array.isArray(patientsData) ? patientsData.length : 0 
+        }));
+        break;
+        
+      case 'consultations':
+        const recordsResponse = await api.doctor.getMedicalRecords(token);
+        const recordsData = recordsResponse.data?.records || recordsResponse.data || recordsResponse;
+        setMedicalRecords(Array.isArray(recordsData) ? recordsData : []);
+        break;
+        
+      case 'prescriptions':
+        const prescriptionsResponse = await api.doctor.getDoctorPrescriptions(token);
+        const prescriptionsData = prescriptionsResponse.data?.prescriptions || prescriptionsResponse.data || prescriptionsResponse;
+        setPrescriptions(Array.isArray(prescriptionsData) ? prescriptionsData : []);
+        break;
+        
+      case 'lab-tests':
+        const testsResponse = await api.doctor.getDoctorLabTests(token);
+        const testsData = testsResponse.data?.tests || testsResponse.data || testsResponse;
+        setLabTests(Array.isArray(testsData) ? testsData : []);
+        break;
+        
+      case 'schedule':
+        // Load appointments/schedule
+        break;
     }
-  };
+    
+  } catch (err) {
+    console.error('Failed to load doctor data:', err);
+    // Set empty arrays on error
+    setPatients([]);
+    setMedicalRecords([]);
+    setPrescriptions([]);
+    setLabTests([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
+// Also update your filteredPatients calculation to handle null/undefined:
+const filteredPatients = (patients || []).filter(patient => {
+  if (!patient || !patient.user) return false;
+  
+  const searchLower = searchTerm.toLowerCase();
+  const firstName = patient.user.first_name?.toLowerCase() || '';
+  const lastName = patient.user.last_name?.toLowerCase() || '';
+  const email = patient.user.email?.toLowerCase() || '';
+  const phone = patient.user.phone?.toLowerCase() || '';
+  
+  return firstName.includes(searchLower) ||
+         lastName.includes(searchLower) ||
+         email.includes(searchLower) ||
+         phone.includes(searchLower);
+});
   const handleActionSuccess = () => {
     loadDoctorData();
   };
-
-  // Filter patients by search term
-  const filteredPatients = patients.filter(patient => 
-    patient.user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (patient.user.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  );
 
   const renderPatientsTab = () => (
     <div className="space-y-6">
