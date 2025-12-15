@@ -135,63 +135,94 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
     setMedications(updatedMedications);
   };
 
-  const handleSubmit = async () => {
-    if (!selectedPatient) {
-      setError('Please select a patient');
-      return;
-    }
+const handleSubmit = async () => {
+  if (!selectedPatient) {
+    setError('Please select a patient');
+    return;
+  }
 
-    // Validate medications
-    const invalidMedications = medications.filter(med => 
-      !med.name.trim() || !med.dosage.trim() || !med.frequency.trim() || !med.duration.trim()
-    );
-    
-    if (invalidMedications.length > 0) {
-      setError('Please fill all required fields for each medication');
-      return;
-    }
+  // Validate medications
+  const invalidMedications = medications.filter(med => 
+    !med.name.trim() || !med.dosage.trim() || !med.frequency.trim() || !med.duration.trim()
+  );
+  
+  if (invalidMedications.length > 0) {
+    setError('Please fill all required fields for each medication');
+    return;
+  }
 
-    if (!formData.diagnosis.trim()) {
-      setError('Diagnosis is required');
-      return;
-    }
+  if (!formData.diagnosis.trim()) {
+    setError('Diagnosis is required');
+    return;
+  }
 
-    setLoading(true);
-    setError('');
-    setSuccess('');
+  setLoading(true);
+  setError('');
+  setSuccess('');
 
-    try {
+  try {
+    // Create all prescriptions first, store promises
+    const prescriptionPromises = medications.map((medication) => {
+      // Match the backend expected structure
       const prescriptionData = {
         patient_id: selectedPatient.id,
-        doctor_id: doctorId,
-        diagnosis: formData.diagnosis,
-        notes: formData.notes,
-        prescribed_date: formData.prescribed_date,
-        expiry_date: formData.expiry_date,
-        isActive: formData.isActive,
-        medications: medications.map(med => ({
-          medication_name: med.name,
-          dosage: med.dosage,
-          frequency: med.frequency,
-          duration: med.duration,
-          instructions: med.instructions
-        }))
+        // Remove doctor_id - backend gets it from JWT token
+        diagnosis: formData.diagnosis, // Backend needs to be updated to accept this
+        notes: formData.notes, // Backend needs to be updated to accept this
+        medication_name: medication.name,
+        dosage: medication.dosage,
+        frequency: medication.frequency,
+        duration: medication.duration,
+        instructions: medication.instructions || '', // Ensure it's not undefined
+        // Backend expects 'end_date', not 'expiry_date'
+        end_date: formData.expiry_date || null // Use null if not provided
+        // Remove isActive - backend sets it automatically
       };
-
-      await api.doctor.createPrescription(token, prescriptionData);
       
-      setSuccess('Prescription created successfully!');
+      return api.doctor.createPrescription(token, prescriptionData);
+    });
+    
+    // Wait for all prescriptions to complete
+    const results = await Promise.allSettled(prescriptionPromises);
+    
+    // Check results
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    
+    if (failed > 0) {
+      // Some failed
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => r.reason?.message || 'Unknown error');
+      
+      setError(`${failed} prescription(s) failed: ${errors.join(', ')}`);
+      
+      if (successful > 0) {
+        // Some succeeded, show partial success
+        setTimeout(() => {
+          setSuccess(`${successful} prescription(s) created successfully (${failed} failed)`);
+          setTimeout(() => {
+            if (onSuccess && successful > 0) onSuccess();
+            if (onClose) onClose();
+          }, 2000);
+        }, 100);
+      }
+    } else {
+      // All succeeded
+      setSuccess(`${medications.length} prescription(s) created successfully!`);
       setTimeout(() => {
         if (onSuccess) onSuccess();
         if (onClose) onClose();
       }, 1500);
-      
-    } catch (err: any) {
-      setError(err.message || 'Failed to create prescription');
-    } finally {
-      setLoading(false);
     }
-  };
+      
+  } catch (err: any) {
+    // This catches any synchronous errors
+    setError(err.message || 'Failed to create prescriptions');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resetForm = () => {
     setSelectedPatient(null);

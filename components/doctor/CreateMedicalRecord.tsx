@@ -80,7 +80,8 @@ export const CreateMedicalRecord: React.FC<CreateMedicalRecordProps> = ({
   useEffect(() => {
     const loadPatients = async () => {
       try {
-        const patientsData = await api.doctor.getPatients(token);
+        const patientsData = await api.doctor.getPatients(token)
+        console.log(patientsData);
         setPatients(Array.isArray(patientsData) ? patientsData : []);
         setFilteredPatients(Array.isArray(patientsData) ? patientsData : []);
       } catch (err) {

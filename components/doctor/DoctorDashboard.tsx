@@ -72,6 +72,7 @@ const loadDoctorData = async () => {
         
       case 'medical-records':
         const recordsData = await api.doctor.getMedicalRecords(token);
+        console.log(medicalRecords);
         setMedicalRecords(Array.isArray(recordsData) ? recordsData : []);
         break;
         

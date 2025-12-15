@@ -543,7 +543,6 @@ getAllLaboratories: async (token: string): Promise<Laboratory[]> => {
       });
       return handleResponse(response);
     },
-
     searchPatients: async (token: string, searchParams: any) => {
       const query = new URLSearchParams(searchParams).toString();
       const response = await fetch(`${BASE_URL}/doctors/patients/search?${query}`, {
