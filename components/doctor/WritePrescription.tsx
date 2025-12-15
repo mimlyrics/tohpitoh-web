@@ -4,14 +4,15 @@ import {
   Pill, 
   Search, 
   X, 
+  User, 
   Calendar, 
   Clock,
   AlertCircle,
   Check,
   Loader2,
-  User,
   Plus,
-  Trash2
+  Minus,
+  FileText
 } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -22,8 +23,10 @@ interface Patient {
     first_name: string;
     last_name: string;
     email: string;
+    phone?: string;
   };
-  known_allergies?: string;
+  date_of_birth?: string;
+  blood_type?: string;
 }
 
 interface Medication {
@@ -31,7 +34,7 @@ interface Medication {
   dosage: string;
   frequency: string;
   duration: string;
-  instructions?: string;
+  instructions: string;
 }
 
 interface WritePrescriptionProps {
@@ -53,15 +56,17 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showPatientSearch, setShowPatientSearch] = useState(true);
   
+  const [formData, setFormData] = useState({
+    diagnosis: '',
+    notes: '',
+    prescribed_date: new Date().toISOString().split('T')[0],
+    expiry_date: '',
+    isActive: true
+  });
+  
   const [medications, setMedications] = useState<Medication[]>([
     { name: '', dosage: '', frequency: '', duration: '', instructions: '' }
   ]);
-  
-  const [prescriptionData, setPrescriptionData] = useState({
-    prescribed_date: new Date().toISOString().split('T')[0],
-    end_date: '',
-    additional_notes: ''
-  });
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -72,8 +77,8 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
     const loadPatients = async () => {
       try {
         const patientsData = await api.doctor.getPatients(token);
-        setPatients(patientsData);
-        setFilteredPatients(patientsData);
+        setPatients(Array.isArray(patientsData) ? patientsData : []);
+        setFilteredPatients(Array.isArray(patientsData) ? patientsData : []);
       } catch (err) {
         console.error('Failed to load patients:', err);
         setError('Failed to load patients list');
@@ -91,7 +96,8 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
       const filtered = patients.filter(patient => 
         patient.user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         patient.user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        patient.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (patient.user.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase())
       );
       setFilteredPatients(filtered);
     }
@@ -100,15 +106,14 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
   const handlePatientSelect = (patient: Patient) => {
     setSelectedPatient(patient);
     setShowPatientSearch(false);
-  };
-
-  const handleMedicationChange = (index: number, field: keyof Medication, value: string) => {
-    const updatedMedications = [...medications];
-    updatedMedications[index] = {
-      ...updatedMedications[index],
-      [field]: value
-    };
-    setMedications(updatedMedications);
+    
+    // Set expiry date to 30 days from now
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    setFormData(prev => ({
+      ...prev,
+      expiry_date: expiry.toISOString().split('T')[0]
+    }));
   };
 
   const addMedication = () => {
@@ -120,38 +125,34 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
 
   const removeMedication = (index: number) => {
     if (medications.length > 1) {
-      const updatedMedications = medications.filter((_, i) => i !== index);
-      setMedications(updatedMedications);
+      setMedications(medications.filter((_, i) => i !== index));
     }
   };
 
-  const validatePrescription = () => {
-    if (!selectedPatient) {
-      return 'Please select a patient';
-    }
-
-    for (const med of medications) {
-      if (!med.name.trim()) {
-        return 'Medication name is required for all medications';
-      }
-      if (!med.dosage.trim()) {
-        return 'Dosage is required for all medications';
-      }
-      if (!med.frequency.trim()) {
-        return 'Frequency is required for all medications';
-      }
-      if (!med.duration.trim()) {
-        return 'Duration is required for all medications';
-      }
-    }
-
-    return null;
+  const updateMedication = (index: number, field: keyof Medication, value: string) => {
+    const updatedMedications = [...medications];
+    updatedMedications[index][field] = value;
+    setMedications(updatedMedications);
   };
 
   const handleSubmit = async () => {
-    const validationError = validatePrescription();
-    if (validationError) {
-      setError(validationError);
+    if (!selectedPatient) {
+      setError('Please select a patient');
+      return;
+    }
+
+    // Validate medications
+    const invalidMedications = medications.filter(med => 
+      !med.name.trim() || !med.dosage.trim() || !med.frequency.trim() || !med.duration.trim()
+    );
+    
+    if (invalidMedications.length > 0) {
+      setError('Please fill all required fields for each medication');
+      return;
+    }
+
+    if (!formData.diagnosis.trim()) {
+      setError('Diagnosis is required');
       return;
     }
 
@@ -160,17 +161,24 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
     setSuccess('');
 
     try {
-      const prescriptionPayload = {
-        patient_id: selectedPatient!.id,
+      const prescriptionData = {
+        patient_id: selectedPatient.id,
         doctor_id: doctorId,
-        medications: medications,
-        prescribed_date: prescriptionData.prescribed_date,
-        end_date: prescriptionData.end_date || null,
-        additional_notes: prescriptionData.additional_notes,
-        is_active: true
+        diagnosis: formData.diagnosis,
+        notes: formData.notes,
+        prescribed_date: formData.prescribed_date,
+        expiry_date: formData.expiry_date,
+        isActive: formData.isActive,
+        medications: medications.map(med => ({
+          medication_name: med.name,
+          dosage: med.dosage,
+          frequency: med.frequency,
+          duration: med.duration,
+          instructions: med.instructions
+        }))
       };
 
-      await api.doctor.createPrescription(token, prescriptionPayload);
+      await api.doctor.createPrescription(token, prescriptionData);
       
       setSuccess('Prescription created successfully!');
       setTimeout(() => {
@@ -187,14 +195,45 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
 
   const resetForm = () => {
     setSelectedPatient(null);
-    setMedications([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
-    setPrescriptionData({
+    setFormData({
+      diagnosis: '',
+      notes: '',
       prescribed_date: new Date().toISOString().split('T')[0],
-      end_date: '',
-      additional_notes: ''
+      expiry_date: '',
+      isActive: true
     });
+    setMedications([{ name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
     setShowPatientSearch(true);
   };
+
+  // Common medication frequencies
+  const frequencyOptions = [
+    'Once daily',
+    'Twice daily',
+    'Three times daily',
+    'Four times daily',
+    'Every 6 hours',
+    'Every 8 hours',
+    'Every 12 hours',
+    'Once weekly',
+    'Twice weekly',
+    'As needed'
+  ];
+
+  // Common durations
+  const durationOptions = [
+    '1 day',
+    '3 days',
+    '5 days',
+    '7 days',
+    '10 days',
+    '14 days',
+    '21 days',
+    '30 days',
+    '60 days',
+    '90 days',
+    'Continuous'
+  ];
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-100 dark:border-slate-700">
@@ -240,7 +279,7 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
             <Search className="absolute left-3 top-3 text-slate-400" size={20} />
             <input
               type="text"
-              placeholder="Search patients by name or email..."
+              placeholder="Search patients by name, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
@@ -268,11 +307,12 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
                         {patient.user.first_name} {patient.user.last_name}
                       </p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        {patient.user.email}
+                        {patient.user.email} • {patient.user.phone || 'No phone'}
                       </p>
-                      {patient.known_allergies && (
-                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                          Allergies: {patient.known_allergies}
+                      {patient.date_of_birth && (
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          DOB: {new Date(patient.date_of_birth).toLocaleDateString()} • 
+                          Blood: {patient.blood_type || 'Unknown'}
                         </p>
                       )}
                     </div>
@@ -285,7 +325,7 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
       )}
 
       {/* Selected Patient */}
-      {selectedPatient && (
+      {selectedPatient && !showPatientSearch && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -299,11 +339,6 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   {selectedPatient.user.email}
                 </p>
-                {selectedPatient.known_allergies && (
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                    Known Allergies: {selectedPatient.known_allergies}
-                  </p>
-                )}
               </div>
             </div>
             <button
@@ -320,170 +355,179 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
       )}
 
       {/* Prescription Form */}
-      {selectedPatient && (
+      {selectedPatient && !showPatientSearch && (
         <div className="space-y-6">
-          {/* Medications */}
+          {/* Diagnosis */}
+          <div>
+            <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
+              Diagnosis *
+            </label>
+            <input
+              type="text"
+              value={formData.diagnosis}
+              onChange={(e) => setFormData({...formData, diagnosis: e.target.value})}
+              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+              placeholder="e.g., Hypertension, Type 2 Diabetes, Asthma"
+              required
+            />
+          </div>
+
+          {/* Medication List */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
                 Medications *
               </label>
               <button
-                type="button"
                 onClick={addMedication}
-                className="text-sm text-secondary dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 flex items-center"
+                className="px-3 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg text-sm flex items-center"
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Add Medication
               </button>
             </div>
 
-            <div className="space-y-4">
-              {medications.map((medication, index) => (
-                <div key={index} className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-slate-800 dark:text-white">
-                      Medication {index + 1}
-                    </h4>
-                    {medications.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeMedication(index)}
-                        className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+            {medications.map((medication, index) => (
+              <div key={index} className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-slate-800 dark:text-white">
+                    Medication #{index + 1}
+                  </h4>
+                  {medications.length > 1 && (
+                    <button
+                      onClick={() => removeMedication(index)}
+                      className="p-1 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      Medication Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={medication.name}
+                      onChange={(e) => updateMedication(index, 'name', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                      placeholder="e.g., Amoxicillin, Lisinopril"
+                    />
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Medication Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={medication.name}
-                        onChange={(e) => handleMedicationChange(index, 'name', e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-                        placeholder="e.g., Amoxicillin 500mg"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Dosage *
-                      </label>
-                      <input
-                        type="text"
-                        value={medication.dosage}
-                        onChange={(e) => handleMedicationChange(index, 'dosage', e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-                        placeholder="e.g., 1 tablet"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Frequency *
-                      </label>
-                      <select
-                        value={medication.frequency}
-                        onChange={(e) => handleMedicationChange(index, 'frequency', e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-                      >
-                        <option value="">Select frequency</option>
-                        <option value="Once daily">Once daily</option>
-                        <option value="Twice daily">Twice daily</option>
-                        <option value="Three times daily">Three times daily</option>
-                        <option value="Four times daily">Four times daily</option>
-                        <option value="Every 6 hours">Every 6 hours</option>
-                        <option value="Every 8 hours">Every 8 hours</option>
-                        <option value="Every 12 hours">Every 12 hours</option>
-                        <option value="As needed">As needed</option>
-                        <option value="Before meals">Before meals</option>
-                        <option value="After meals">After meals</option>
-                        <option value="At bedtime">At bedtime</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Duration *
-                      </label>
-                      <input
-                        type="text"
-                        value={medication.duration}
-                        onChange={(e) => handleMedicationChange(index, 'duration', e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
-                        placeholder="e.g., 7 days, 2 weeks, 1 month"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                        Instructions (Optional)
-                      </label>
-                      <textarea
-                        value={medication.instructions || ''}
-                        onChange={(e) => handleMedicationChange(index, 'instructions', e.target.value)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm min-h-[60px]"
-                        placeholder="Special instructions for taking this medication..."
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      Dosage *
+                    </label>
+                    <input
+                      type="text"
+                      value={medication.dosage}
+                      onChange={(e) => updateMedication(index, 'dosage', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                      placeholder="e.g., 500mg, 10mg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      Frequency *
+                    </label>
+                    <select
+                      value={medication.frequency}
+                      onChange={(e) => updateMedication(index, 'frequency', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                    >
+                      <option value="">Select frequency</option>
+                      {frequencyOptions.map(freq => (
+                        <option key={freq} value={freq}>{freq}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      Duration *
+                    </label>
+                    <select
+                      value={medication.duration}
+                      onChange={(e) => updateMedication(index, 'duration', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                    >
+                      <option value="">Select duration</option>
+                      {durationOptions.map(dur => (
+                        <option key={dur} value={dur}>{dur}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
+                      Instructions (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={medication.instructions}
+                      onChange={(e) => updateMedication(index, 'instructions', e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                      placeholder="e.g., Take with food, Avoid alcohol"
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
 
-          {/* Prescription Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Additional Information */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
-                Prescription Date *
+                Prescribed Date *
               </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                <input
-                  type="date"
-                  value={prescriptionData.prescribed_date}
-                  onChange={(e) => setPrescriptionData({...prescriptionData, prescribed_date: e.target.value})}
-                  className="w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
-                />
-              </div>
+              <input
+                type="date"
+                value={formData.prescribed_date}
+                onChange={(e) => setFormData({...formData, prescribed_date: e.target.value})}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+              />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
-                End Date (Optional)
+                Expiry Date *
               </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                <input
-                  type="date"
-                  value={prescriptionData.end_date}
-                  onChange={(e) => setPrescriptionData({...prescriptionData, end_date: e.target.value})}
-                  className="w-full pl-10 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
-                  min={prescriptionData.prescribed_date}
-                />
-              </div>
+              <input
+                type="date"
+                value={formData.expiry_date}
+                onChange={(e) => setFormData({...formData, expiry_date: e.target.value})}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+              />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">
-              Additional Notes (Optional)
+              Additional Notes
             </label>
             <textarea
-              value={prescriptionData.additional_notes}
-              onChange={(e) => setPrescriptionData({...prescriptionData, additional_notes: e.target.value})}
+              value={formData.notes}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[80px]"
-              placeholder="Any additional notes or warnings for the patient..."
+              placeholder="Any additional instructions or notes for the patient..."
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isActive"
+              checked={formData.isActive}
+              onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
+              className="w-4 h-4 text-blue-600 rounded"
+            />
+            <label htmlFor="isActive" className="ml-2 text-sm text-slate-600 dark:text-slate-300">
+              Mark prescription as active
+            </label>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
             <button
               onClick={resetForm}
               className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg"
@@ -493,7 +537,7 @@ export const WritePrescription: React.FC<WritePrescriptionProps> = ({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !formData.diagnosis.trim() || medications.some(m => !m.name || !m.dosage || !m.frequency || !m.duration)}
               className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               {loading ? (
